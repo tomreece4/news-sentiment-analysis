@@ -5,7 +5,6 @@ import pandas as pd
 from wordcloud import WordCloud
 from bs4 import BeautifulSoup
 
-
 # Function to fetch news articles by web scraping
 def fetch_news(query, max_articles=10):
     url = f'https://news.google.com/search?q={query}'
@@ -26,7 +25,6 @@ def fetch_news(query, max_articles=10):
 
     return articles
 
-
 # Function to perform sentiment analysis
 def analyze_sentiment(articles):
     sentiment_results = []
@@ -39,6 +37,37 @@ def analyze_sentiment(articles):
             sentiment_results.append({'title': "No Title", 'sentiment': 0})
     return sentiment_results
 
+# Function to visualize sentiment data
+def visualize_sentiment(sentiment_results):
+    if not sentiment_results:
+        print("No sentiment data to visualize.")
+        return
+
+    df = pd.DataFrame(sentiment_results)
+
+    if df.empty or 'sentiment' not in df.columns:
+        print("Sentiment data is empty or malformed.")
+        return
+
+    # Plot sentiment distribution
+    plt.figure(figsize=(10, 6))
+    plt.hist(df['sentiment'], bins=20, color='skyblue', edgecolor='black')
+    plt.title('Sentiment Distribution')
+    plt.xlabel('Sentiment Polarity')
+    plt.ylabel('Frequency')
+    plt.show()
+
+    # Generate a WordCloud of positive titles
+    positive_titles = ' '.join(df[df['sentiment'] > 0]['title'])
+    if positive_titles:
+        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(positive_titles)
+        plt.figure(figsize=(10, 6))
+        plt.imshow(wordcloud, interpolation='bilinear')
+        plt.axis('off')
+        plt.title('WordCloud of Positive News Titles')
+        plt.show()
+    else:
+        print("No positive titles to generate a WordCloud.")
 
 # Main function
 def main():
@@ -57,7 +86,6 @@ def main():
 
     # Display results and visualize
     visualize_sentiment(sentiment_results)
-
 
 if __name__ == '__main__':
     main()
