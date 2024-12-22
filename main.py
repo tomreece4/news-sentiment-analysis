@@ -3,27 +3,27 @@ from textblob import TextBlob
 import matplotlib.pyplot as plt
 import pandas as pd
 from wordcloud import WordCloud
-from bs4 import BeautifulSoup
 
-# Function to fetch news articles by web scraping
-def fetch_news(query, max_articles=10):
-    url = f'https://news.google.com/search?q={query}'
-    response = requests.get(url)
 
-    if response.status_code != 200:
-        print(f"Error fetching news: {response.status_code}")
+# Function to fetch news articles using NewsAPI
+def fetch_news(query, api_key, max_articles=20):
+    url = f'https://newsapi.org/v2/everything?q={query}&pageSize={max_articles}&apiKey={api_key}'
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad status codes
+        data = response.json()
+
+        if data.get("status") != "ok" or not data.get("articles"):
+            print("No articles found or an error occurred.")
+            return []
+
+        articles = [{"title": article["title"], "link": article["url"]} for article in data["articles"] if
+                    article["title"]]
+        return articles
+    except Exception as e:
+        print(f"Error fetching news: {e}")
         return []
 
-    soup = BeautifulSoup(response.content, 'html.parser')
-    headlines = soup.find_all('a', class_='DY5T1d', limit=max_articles)
-
-    articles = []
-    for headline in headlines:
-        title = headline.get_text()
-        link = 'https://news.google.com' + headline['href'][1:]
-        articles.append({'title': title, 'link': link})
-
-    return articles
 
 # Function to perform sentiment analysis
 def analyze_sentiment(articles):
@@ -36,6 +36,7 @@ def analyze_sentiment(articles):
         else:
             sentiment_results.append({'title': "No Title", 'sentiment': 0})
     return sentiment_results
+
 
 # Function to visualize sentiment data
 def visualize_sentiment(sentiment_results):
@@ -69,12 +70,14 @@ def visualize_sentiment(sentiment_results):
     else:
         print("No positive titles to generate a WordCloud.")
 
+
 # Main function
 def main():
+    api_key = input("Enter your NewsAPI key: ")
     query = input("Enter a topic to search news: ")
 
     # Fetch news articles
-    articles = fetch_news(query)
+    articles = fetch_news(query, api_key)
     if not articles:
         print("No articles found.")
         return
@@ -87,5 +90,8 @@ def main():
     # Display results and visualize
     visualize_sentiment(sentiment_results)
 
+
 if __name__ == '__main__':
     main()
+
+
