@@ -5,6 +5,7 @@ import pandas as pd
 from wordcloud import WordCloud
 from bs4 import BeautifulSoup
 
+
 # Function to fetch news articles by web scraping
 def fetch_news(query, max_articles=10):
     url = f'https://news.google.com/search?q={query}'
@@ -26,6 +27,19 @@ def fetch_news(query, max_articles=10):
     return articles
 
 
+# Function to perform sentiment analysis
+def analyze_sentiment(articles):
+    sentiment_results = []
+    for article in articles:
+        title = article['title']
+        if title:  # Ensure title is not empty
+            sentiment = TextBlob(title).sentiment.polarity
+            sentiment_results.append({'title': title, 'sentiment': sentiment})
+        else:
+            sentiment_results.append({'title': "No Title", 'sentiment': 0})
+    return sentiment_results
+
+
 # Main function
 def main():
     query = input("Enter a topic to search news: ")
@@ -43,6 +57,7 @@ def main():
 
     # Display results and visualize
     visualize_sentiment(sentiment_results)
+
 
 if __name__ == '__main__':
     main()
