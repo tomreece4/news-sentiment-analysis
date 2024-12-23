@@ -15,8 +15,7 @@ def fetch_news(query, api_key, max_articles=20):
             print("No articles found or an error occurred.")
             return []
 
-        articles = [{"title": article["title"], "link": article["url"]} for article in data["articles"] if
-                    article["title"]]
+        articles = [{"title": article["title"], "content": article.get("content", ""), "link": article["url"]} for article in data["articles"] if article["title"]]
         return articles
     except Exception as e:
         print(f"Error fetching news: {e}")
@@ -27,11 +26,16 @@ def analyze_sentiment(articles):
     sentiment_results = []
     for article in articles:
         title = article['title']
-        if title:  # Ensure title is not empty
-            sentiment = TextBlob(title).sentiment.polarity
-            sentiment_results.append({'title': title, 'sentiment': sentiment})
+        content = article['content']
+
+        # Combine title and content for analysis
+        text_to_analyze = f"{title} {content}" if content else title
+
+        if text_to_analyze:  # Ensure text is not empty
+            sentiment = TextBlob(text_to_analyze).sentiment.polarity
+            sentiment_results.append({'title': title, 'content': content, 'sentiment': sentiment})
         else:
-            sentiment_results.append({'title': "No Title", 'sentiment': 0})
+            sentiment_results.append({'title': "No Title", 'content': "", 'sentiment': 0})
     return sentiment_results
 
 # Function to visualize sentiment data
