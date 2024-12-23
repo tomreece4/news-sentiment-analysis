@@ -1,7 +1,10 @@
 import requests
-from textblob import TextBlob
 import matplotlib.pyplot as plt
 import pandas as pd
+from nltk.sentiment import SentimentIntensityAnalyzer
+from nltk import download
+
+download('vader_lexicon')  # Download VADER lexicon for sentiment analysis
 
 # Function to fetch news articles using NewsAPI
 def fetch_news(query, api_key, max_articles=20):
@@ -21,9 +24,11 @@ def fetch_news(query, api_key, max_articles=20):
         print(f"Error fetching news: {e}")
         return []
 
-# Function to perform sentiment analysis
+# Function to perform sentiment analysis using VADER
 def analyze_sentiment(articles):
+    sia = SentimentIntensityAnalyzer()
     sentiment_results = []
+
     for article in articles:
         title = article['title']
         content = article['content']
@@ -32,10 +37,15 @@ def analyze_sentiment(articles):
         text_to_analyze = f"{title} {content}" if content else title
 
         if text_to_analyze:  # Ensure text is not empty
-            sentiment = TextBlob(text_to_analyze).sentiment.polarity
-            sentiment_results.append({'title': title, 'content': content, 'sentiment': sentiment})
+            sentiment_score = sia.polarity_scores(text_to_analyze)
+            sentiment_results.append({
+                'title': title,
+                'content': content,
+                'sentiment': sentiment_score['compound']  # Use compound score for overall sentiment
+            })
         else:
             sentiment_results.append({'title': "No Title", 'content': "", 'sentiment': 0})
+
     return sentiment_results
 
 # Function to visualize sentiment data
@@ -52,7 +62,7 @@ def visualize_sentiment(sentiment_results):
 
     # Classify sentiments into positive, negative, and neutral
     df['sentiment_category'] = df['sentiment'].apply(
-        lambda x: 'Positive' if x > 0 else ('Negative' if x < 0 else 'Neutral')
+        lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
     )
 
     sentiment_counts = df['sentiment_category'].value_counts()
@@ -95,3 +105,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
