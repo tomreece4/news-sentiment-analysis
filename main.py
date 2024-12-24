@@ -18,35 +18,59 @@ def fetch_news(query, api_key, max_articles=20):
             print("No articles found or an error occurred.")
             return []
 
-        articles = [{"title": article["title"], "content": article.get("content", ""), "link": article["url"]} for article in data["articles"] if article["title"]]
+        articles = [{"title": article["title"], "content": article.get("content", ""), "link": article["url"]} for
+                    article in data["articles"] if article["title"]]
         return articles
     except Exception as e:
         print(f"Error fetching news: {e}")
         return []
 
+
 # Function to perform sentiment analysis using VADER
-def analyze_sentiment(articles):
+def analyze_financial_sentiment(articles):
     sia = SentimentIntensityAnalyzer()
     sentiment_results = []
+
+    # Define positive and negative financial keywords
+    positive_keywords = ['growth', 'surge', 'profit', 'increase', 'gain', 'uptrend', 'rally', 'boom', 'bullish', 'rise']
+    negative_keywords = ['loss', 'decline', 'drop', 'plunge', 'fall', 'bearish', 'downtrend', 'crash', 'collapse', 'slump']
 
     for article in articles:
         title = article['title']
         content = article['content']
-
-        # Combine title and content for analysis
         text_to_analyze = f"{title} {content}" if content else title
 
-        if text_to_analyze:  # Ensure text is not empty
-            sentiment_score = sia.polarity_scores(text_to_analyze)
-            sentiment_results.append({
-                'title': title,
-                'content': content,
-                'sentiment': sentiment_score['compound']  # Use compound score for overall sentiment
-            })
-        else:
-            sentiment_results.append({'title': "No Title", 'content': "", 'sentiment': 0})
+        # Perform initial sentiment analysis using VADER
+        sentiment_score = sia.polarity_scores(text_to_analyze)
+
+        # Count occurrences of positive and negative keywords in the text
+        positive_count = sum(text_to_analyze.lower().count(keyword) for keyword in positive_keywords)
+        negative_count = sum(text_to_analyze.lower().count(keyword) for keyword in negative_keywords)
+
+        # Adjust the sentiment score based on keyword occurrences
+        sentiment_score['compound'] += positive_count * 0.05  # Adjust score positively for each occurrence of a positive keyword
+        sentiment_score['compound'] -= negative_count * 0.05  # Adjust score negatively for each occurrence of a negative keyword
+
+        # Ensure the compound score stays within the range [-1, 1]
+        sentiment_score['compound'] = max(-1, min(1, sentiment_score['compound']))
+
+        # Classify the sentiment based on the adjusted score
+        sentiment_category = "Neutral"
+        if sentiment_score['compound'] > 0.05:
+            sentiment_category = "Positive"
+        elif sentiment_score['compound'] < -0.05:
+            sentiment_category = "Negative"
+
+        sentiment_results.append({
+            'title': title,
+            'sentiment_score': sentiment_score['compound'],  # Store the sentiment score in 'sentiment_score'
+            'category': sentiment_category,
+            'positive_count': positive_count,
+            'negative_count': negative_count
+        })
 
     return sentiment_results
+
 
 # Function to visualize sentiment data
 def visualize_sentiment(sentiment_results):
@@ -56,12 +80,12 @@ def visualize_sentiment(sentiment_results):
 
     df = pd.DataFrame(sentiment_results)
 
-    if df.empty or 'sentiment' not in df.columns:
+    if df.empty or 'sentiment_score' not in df.columns:  # Fix here, check 'sentiment_score' column
         print("Sentiment data is empty or malformed.")
         return
 
     # Classify sentiments into positive, negative, and neutral
-    df['sentiment_category'] = df['sentiment'].apply(
+    df['sentiment_category'] = df['sentiment_score'].apply(  # Update here to use 'sentiment_score'
         lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
     )
 
@@ -77,12 +101,13 @@ def visualize_sentiment(sentiment_results):
     plt.show()
 
     # Display a table of articles with their sentiments
-    sorted_df = df.sort_values('sentiment', ascending=False)
+    sorted_df = df.sort_values('sentiment_score', ascending=False)  # Update here to use 'sentiment_score'
     print("Top Articles by Sentiment:")
-    print(sorted_df[['title', 'sentiment']].head(10).to_string(index=False))
+    print(sorted_df[['title', 'sentiment_score']].head(10).to_string(index=False))
 
     print("\nMost Negative Articles:")
-    print(sorted_df[['title', 'sentiment']].tail(10).to_string(index=False))
+    print(sorted_df[['title', 'sentiment_score']].tail(10).to_string(index=False))
+
 
 # Main function
 def main():
@@ -98,11 +123,11 @@ def main():
     print(f"Fetched {len(articles)} articles.")
 
     # Perform sentiment analysis
-    sentiment_results = analyze_sentiment(articles)
+    sentiment_results = analyze_financial_sentiment(articles)
 
     # Display results and visualize
     visualize_sentiment(sentiment_results)
 
+
 if __name__ == '__main__':
     main()
-
