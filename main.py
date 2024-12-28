@@ -1,15 +1,28 @@
+import os
 import requests
 import matplotlib.pyplot as plt
 import pandas as pd
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk import download
+from dotenv import load_dotenv
 
-download('vader_lexicon')  # Download VADER lexicon for sentiment analysis
+# Download VADER lexicon for sentiment analysis
+download('vader_lexicon')
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Retrieve the Finnhub API key from the environment
+api_key = os.getenv('API_KEY')
+
+# Check if the API key is loaded successfully
+if not api_key:
+    print("API key not found. Please ensure it's stored in the .env file.")
+    exit()
 
 
 # Function to check if an article is finance-related
 def is_financial_article(article):
-    # Expanded list of finance-related keywords
     finance_keywords = [
         'stock', 'investment', 'market', 'financial', 'economy', 'profit', 'loss', 'trading',
         'economy', 'banking', 'asset', 'portfolio', 'dividend', 'stocks', 'bonds', 'revenue', 'debt',
@@ -103,12 +116,12 @@ def visualize_sentiment(sentiment_results):
 
     df = pd.DataFrame(sentiment_results)
 
-    if df.empty or 'sentiment_score' not in df.columns:  # Fix here, check 'sentiment_score' column
+    if df.empty or 'sentiment_score' not in df.columns:
         print("Sentiment data is empty or malformed.")
         return
 
     # Classify sentiments into positive, negative, and neutral
-    df['sentiment_category'] = df['sentiment_score'].apply(  # Update here to use 'sentiment_score'
+    df['sentiment_category'] = df['sentiment_score'].apply(
         lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
     )
 
@@ -124,7 +137,7 @@ def visualize_sentiment(sentiment_results):
     plt.show()
 
     # Display a table of articles with their sentiments
-    sorted_df = df.sort_values('sentiment_score', ascending=False)  # Update here to use 'sentiment_score'
+    sorted_df = df.sort_values('sentiment_score', ascending=False)
     print("Top Articles by Sentiment:")
     print(sorted_df[['headline', 'sentiment_score']].head(10).to_string(index=False))
 
@@ -134,9 +147,7 @@ def visualize_sentiment(sentiment_results):
 
 # Main function
 def main():
-    api_key = input("Enter your Finnhub API key: ")
-
-    # Fetch financial news articles
+    # Fetch financial news articles using the API key from environment variable
     articles = fetch_news(api_key)
     if not articles:
         print("No articles found.")
