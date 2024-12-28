@@ -1,28 +1,25 @@
-import os
 import requests
-import matplotlib.pyplot as plt
+import time
 import pandas as pd
+import matplotlib.pyplot as plt
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk import download
+import os
 from dotenv import load_dotenv
+
+# Load environment variables from a .env file
+load_dotenv()
 
 # Download VADER lexicon for sentiment analysis
 download('vader_lexicon')
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Retrieve the Finnhub API key from the environment
-api_key = os.getenv('API_KEY')
-
-# Check if the API key is loaded successfully
-if not api_key:
-    print("API key not found. Please ensure it's stored in the .env file.")
-    exit()
+# Get API Key from environment variable
+API_KEY = os.getenv("API_KEY")
 
 
 # Function to check if an article is finance-related
 def is_financial_article(article):
+    # Expanded list of finance-related keywords
     finance_keywords = [
         'stock', 'investment', 'market', 'financial', 'economy', 'profit', 'loss', 'trading',
         'economy', 'banking', 'asset', 'portfolio', 'dividend', 'stocks', 'bonds', 'revenue', 'debt',
@@ -35,30 +32,50 @@ def is_financial_article(article):
     return any(keyword in text.lower() for keyword in finance_keywords)
 
 
-# Function to fetch financial news using Finnhub API
-def fetch_news(api_key, max_articles=20):
-    url = f'https://finnhub.io/api/v1/news?category=general&token={api_key}'
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad status codes
-        data = response.json()
+# Function to fetch news articles using Finnhub API, including pagination
+def fetch_news(api_key, max_articles=100):
+    articles = []
+    page = 0
+    articles_fetched = 0
 
-        if not data:
-            print("No articles found or an error occurred.")
-            return []
+    while articles_fetched < max_articles:
+        timestamp = int(time.time())  # Use current timestamp to avoid cached results
+        url = f'https://finnhub.io/api/v1/news?time={timestamp}&token={api_key}&page={page}'
 
-        articles = [{
-            "headline": article["headline"],
-            "summary": article.get("summary", ""),
-            "url": article["url"]
-        } for article in data]
+        try:
+            response = requests.get(url)
+            response.raise_for_status()  # Raise an error for bad status codes
+            data = response.json()
 
-        # Filter out non-financial articles
-        filtered_articles = [article for article in articles if is_financial_article(article)]
-        return filtered_articles
-    except Exception as e:
-        print(f"Error fetching news: {e}")
-        return []
+            if not data:
+                print("No articles found or an error occurred.")
+                break
+
+            # Add fetched articles to the list
+            new_articles = [{
+                "headline": article["headline"],
+                "summary": article.get("summary", ""),
+                "url": article["url"]
+            } for article in data]
+
+            articles.extend(new_articles)
+            articles_fetched += len(new_articles)
+            page += 1  # Move to the next page if more articles are available
+
+            print(f"Fetched {articles_fetched} articles so far...")
+
+            # If the number of articles fetched is less than the maximum requested, break the loop
+            if len(new_articles) == 0:
+                break
+
+            # Adding a small delay between requests to prevent hitting rate limits
+            time.sleep(1)
+
+        except Exception as e:
+            print(f"Error fetching news: {e}")
+            break
+
+    return articles
 
 
 # Function to perform sentiment analysis using VADER
@@ -99,7 +116,7 @@ def analyze_financial_sentiment(articles):
 
         sentiment_results.append({
             'headline': headline,
-            'sentiment_score': sentiment_score['compound'],  # Store the sentiment score in 'sentiment_score'
+            'sentiment_score': sentiment_score['compound'],
             'category': sentiment_category,
             'positive_count': positive_count,
             'negative_count': negative_count
@@ -147,8 +164,8 @@ def visualize_sentiment(sentiment_results):
 
 # Main function
 def main():
-    # Fetch financial news articles using the API key from environment variable
-    articles = fetch_news(api_key)
+    # Fetch financial news articles without asking for category
+    articles = fetch_news(API_KEY)
     if not articles:
         print("No articles found.")
         return
