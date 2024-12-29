@@ -6,6 +6,7 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk import download
 import os
 from dotenv import load_dotenv
+import datetime
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -55,7 +56,8 @@ def fetch_news(api_key, max_articles=100):
             new_articles = [{
                 "headline": article["headline"],
                 "summary": article.get("summary", ""),
-                "url": article["url"]
+                "url": article["url"],
+                "datetime": article["datetime"]
             } for article in data]
 
             articles.extend(new_articles)
@@ -91,7 +93,11 @@ def analyze_financial_sentiment(articles):
     for article in articles:
         headline = article['headline']
         summary = article['summary']
+        publish_date = article['datetime']
         text_to_analyze = f"{headline} {summary}" if summary else headline
+
+        #Convert publish date from unix timestamp to human readable format
+        readable_date = datetime.datetime.fromtimestamp(publish_date)
 
         # Perform initial sentiment analysis using VADER
         sentiment_score = sia.polarity_scores(text_to_analyze)
@@ -119,7 +125,8 @@ def analyze_financial_sentiment(articles):
             'sentiment_score': sentiment_score['compound'],
             'category': sentiment_category,
             'positive_count': positive_count,
-            'negative_count': negative_count
+            'negative_count': negative_count,
+            'date': readable_date
         })
 
     return sentiment_results
@@ -154,12 +161,12 @@ def visualize_sentiment(sentiment_results):
     plt.show()
 
     # Display a table of articles with their sentiments
-    sorted_df = df.sort_values('sentiment_score', ascending=False)
+    sorted_df = df.sort_values('date', ascending=False)
     print("Top Articles by Sentiment:")
-    print(sorted_df[['headline', 'sentiment_score']].head(10).to_string(index=False))
+    print(sorted_df[['date', 'headline', 'sentiment_score']].head(10).to_string(index=False))
 
     print("\nMost Negative Articles:")
-    print(sorted_df[['headline', 'sentiment_score']].tail(10).to_string(index=False))
+    print(sorted_df[['date', 'headline', 'sentiment_score']].tail(10).to_string(index=False))
 
 
 # Main function
