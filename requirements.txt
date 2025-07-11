@@ -1,0 +1,6 @@
+numpy<2
+pandas>=2.0
+matplotlib>=3.7
+nltk>=3.8
+feedparser>=6.0
+python-dotenv>=1.0

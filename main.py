@@ -1,190 +1,109 @@
-import requests
-import time
-import pandas as pd
-import matplotlib.pyplot as plt
-from nltk.sentiment import SentimentIntensityAnalyzer
-from nltk import download
-import os
-from dotenv import load_dotenv
 import datetime
+import time
+import feedparser
+import matplotlib.pyplot as plt
+import pandas as pd
+from dotenv import load_dotenv
+from nltk import download
+from nltk.sentiment import SentimentIntensityAnalyzer
 
-# Load environment variables from a .env file
+# Load environment variables
 load_dotenv()
 
 # Download VADER lexicon for sentiment analysis
-download('vader_lexicon')
+try:
+    download('vader_lexicon')
+except:
+    pass
 
-# Get API Key from environment variable
-API_KEY = os.getenv("API_KEY")
-
-
-# Function to check if an article is finance-related
-def is_financial_article(article):
-    # Expanded list of finance-related keywords
-    finance_keywords = [
-        'stock', 'investment', 'market', 'financial', 'economy', 'profit', 'loss', 'trading',
-        'economy', 'banking', 'asset', 'portfolio', 'dividend', 'stocks', 'bonds', 'revenue', 'debt',
-        'equity', 'inflation', 'tax', 'fiscal', 'interest rate', 'shares', 'capital', 'merger', 'acquisition',
-        'startup', 'venture capital', 'commodities', 'fund', 'cryptocurrency', 'bitcoin', 'blockchain'
-    ]
-
-    # Check if any finance keyword is in the article's title or content
-    text = f"{article['headline']} {article['summary']}" if article['summary'] else article['headline']
-    return any(keyword in text.lower() for keyword in finance_keywords)
-
-
-# Function to fetch news articles using Finnhub API, including pagination
-def fetch_news(api_key, max_articles=100):
+# Function to fetch news via RSS feeds
+def fetch_rss_news(rss_urls, max_articles=100):
     articles = []
-    page = 0
-    articles_fetched = 0
-
-    while articles_fetched < max_articles:
-        timestamp = int(time.time())  # Use current timestamp to avoid cached results
-        url = f'https://finnhub.io/api/v1/news?time={timestamp}&token={api_key}&page={page}'
-
-        try:
-            response = requests.get(url)
-            response.raise_for_status()  # Raise an error for bad status codes
-            data = response.json()
-
-            if not data:
-                print("No articles found or an error occurred.")
+    for url in rss_urls:
+        feed = feedparser.parse(url)
+        for entry in feed.entries:
+            if len(articles) >= max_articles:
                 break
-
-            # Add fetched articles to the list
-            new_articles = [{
-                "headline": article["headline"],
-                "summary": article.get("summary", ""),
-                "url": article["url"],
-                "datetime": article["datetime"]
-            } for article in data]
-
-            articles.extend(new_articles)
-            articles_fetched += len(new_articles)
-            page += 1  # Move to the next page if more articles are available
-
-            print(f"Fetched {articles_fetched} articles so far...")
-
-            # If the number of articles fetched is less than the maximum requested, break the loop
-            if len(new_articles) == 0:
-                break
-
-            # Adding a small delay between requests to prevent hitting rate limits
-            time.sleep(1)
-
-        except Exception as e:
-            print(f"Error fetching news: {e}")
+            pub_time = None
+            if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                pub_time = time.mktime(entry.published_parsed)
+            articles.append({
+                'headline': entry.title,
+                'summary': getattr(entry, 'summary', ''),
+                'url': entry.link,
+                'datetime': pub_time
+            })
+        if len(articles) >= max_articles:
             break
-
     return articles
-
 
 # Function to perform sentiment analysis using VADER
 def analyze_financial_sentiment(articles):
     sia = SentimentIntensityAnalyzer()
     sentiment_results = []
 
-    # Define positive and negative financial keywords
     positive_keywords = ['growth', 'surge', 'profit', 'increase', 'gain', 'uptrend', 'rally', 'boom', 'bullish', 'rise']
-    negative_keywords = ['loss', 'decline', 'drop', 'plunge', 'fall', 'bearish', 'downtrend', 'crash', 'collapse',
-                         'slump']
+    negative_keywords = ['loss', 'decline', 'drop', 'plunge', 'fall', 'bearish', 'downtrend', 'crash', 'collapse', 'slump']
 
     for article in articles:
-        headline = article['headline']
-        summary = article['summary']
-        publish_date = article['datetime']
-        text_to_analyze = f"{headline} {summary}" if summary else headline
+        text = f"{article['headline']} {article['summary']}".lower()
+        score = sia.polarity_scores(text)
 
-        #Convert publish date from unix timestamp to human readable format
-        readable_date = datetime.datetime.fromtimestamp(publish_date)
+        # Adjust weights
+        pos_count = sum(text.count(k) for k in positive_keywords)
+        neg_count = sum(text.count(k) for k in negative_keywords)
+        score['compound'] = max(-1, min(1, score['compound'] + 0.1 * pos_count - 0.1 * neg_count))
 
-        # Perform initial sentiment analysis using VADER
-        sentiment_score = sia.polarity_scores(text_to_analyze)
+        category = 'Neutral'
+        if score['compound'] > 0.05:
+            category = 'Positive'
+        elif score['compound'] < -0.05:
+            category = 'Negative'
 
-        # Count occurrences of positive and negative keywords in the text
-        positive_count = sum(text_to_analyze.lower().count(keyword) for keyword in positive_keywords)
-        negative_count = sum(text_to_analyze.lower().count(keyword) for keyword in negative_keywords)
-
-        # Adjust the sentiment score based on keyword occurrences
-        sentiment_score['compound'] += positive_count * 0.10  # Increased weight for positive keywords
-        sentiment_score['compound'] -= negative_count * 0.10  # Increased weight for negative keywords
-
-        # Ensure the compound score stays within the range [-1, 1]
-        sentiment_score['compound'] = max(-1, min(1, sentiment_score['compound']))
-
-        # Classify the sentiment based on the adjusted score
-        sentiment_category = "Neutral"
-        if sentiment_score['compound'] > 0.05:
-            sentiment_category = "Positive"
-        elif sentiment_score['compound'] < -0.05:
-            sentiment_category = "Negative"
+        readable_date = None
+        if article['datetime']:
+            readable_date = datetime.datetime.fromtimestamp(article['datetime'])
 
         sentiment_results.append({
-            'headline': headline,
-            'sentiment_score': sentiment_score['compound'],
-            'category': sentiment_category,
-            'positive_count': positive_count,
-            'negative_count': negative_count,
-            'date': readable_date
+            'date': readable_date,
+            'headline': article['headline'],
+            'url': article['url'],
+            'score': score['compound'],
+            'category': category,
+            'pos_count': pos_count,
+            'neg_count': neg_count
         })
-
     return sentiment_results
 
-
 # Function to visualize sentiment data
-def visualize_sentiment(sentiment_results):
-    if not sentiment_results:
-        print("No sentiment data to visualize.")
+def visualize_sentiment(results):
+    if not results:
+        print("No data to visualize.")
         return
+    df = pd.DataFrame(results)
+    df['category'] = df['score'].apply(lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral'))
 
-    df = pd.DataFrame(sentiment_results)
-
-    if df.empty or 'sentiment_score' not in df.columns:
-        print("Sentiment data is empty or malformed.")
-        return
-
-    # Classify sentiments into positive, negative, and neutral
-    df['sentiment_category'] = df['sentiment_score'].apply(
-        lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
-    )
-
-    sentiment_counts = df['sentiment_category'].value_counts()
-
-    # Plot sentiment category distribution
-    plt.figure(figsize=(8, 5))
-    sentiment_counts.plot(kind='bar', color=['green', 'red', 'gray'], edgecolor='black')
-    plt.title('Sentiment Category Distribution')
-    plt.xlabel('Sentiment Category')
-    plt.ylabel('Number of Articles')
-    plt.xticks(rotation=0)
+    counts = df['category'].value_counts()
+    plt.figure(figsize=(8,5))
+    counts.plot(kind='bar', edgecolor='black')
+    plt.title('Sentiment Distribution')
+    plt.xlabel('Sentiment')
+    plt.ylabel('Count')
     plt.show()
 
-    # Display a table of articles with their sentiments
-    sorted_df = df.sort_values('date', ascending=False)
-    print("Top Articles by Sentiment:")
-    print(sorted_df[['date', 'headline', 'sentiment_score']].head(10).to_string(index=False))
+    print(df.sort_values('date', ascending=False)[['date','headline','score']].head(10).to_string(index=False))
 
-    print("\nMost Negative Articles:")
-    print(sorted_df[['date', 'headline', 'sentiment_score']].tail(10).to_string(index=False))
-
-
-# Main function
-def main():
-    # Fetch financial news articles without asking for category
-    articles = fetch_news(API_KEY)
-    if not articles:
-        print("No articles found.")
-        return
-
-    print(f"Fetched {len(articles)} articles.")
-
-    # Perform sentiment analysis
-    sentiment_results = analyze_financial_sentiment(articles)
-
-    # Display results and visualize
-    visualize_sentiment(sentiment_results)
-
-
+# Main
 if __name__ == '__main__':
-    main()
+    # Define RSS feeds for financial news
+    RSS_FEEDS = [
+        'https://feeds.reuters.com/reuters/businessNews',
+        'https://www.investing.com/rss/news.rss',
+        'https://feeds.marketwatch.com/marketwatch/topstories/'
+    ]
+    articles = fetch_rss_news(RSS_FEEDS, max_articles=100)
+    print(f"Fetched {len(articles)} articles via RSS.")
+
+    sentiment_data = analyze_financial_sentiment(articles)
+    visualize_sentiment(sentiment_data)
+
