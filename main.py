@@ -6,6 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from nltk import download
 from nltk.sentiment import SentimentIntensityAnalyzer
+import re
 
 # Load environment variables
 load_dotenv()
@@ -29,7 +30,7 @@ def fetch_rss_news(rss_urls, max_articles=100):
                 pub_time = time.mktime(entry.published_parsed)
             articles.append({
                 'headline': entry.title,
-                'summary': getattr(entry, 'summary', ''),
+                'summary': re.sub(r'<[^>]+>', '', getattr(entry, 'summary', '')),
                 'url': entry.link,
                 'datetime': pub_time
             })
@@ -47,11 +48,13 @@ def analyze_financial_sentiment(articles):
 
     for article in articles:
         text = f"{article['headline']} {article['summary']}".lower()
-        score = sia.polarity_scores(text)
+        cleaned = re.sub(r'http\\S+|www\\.\\S+', '', text).lower()
+
+        score = sia.polarity_scores(cleaned)
 
         # Adjust weights
-        pos_count = sum(text.count(k) for k in positive_keywords)
-        neg_count = sum(text.count(k) for k in negative_keywords)
+        pos_count = sum(cleaned.count(k) for k in positive_keywords)
+        neg_count = sum(cleaned.count(k) for k in negative_keywords)
         score['compound'] = max(-1, min(1, score['compound'] + 0.1 * pos_count - 0.1 * neg_count))
 
         category = 'Neutral'
@@ -105,4 +108,5 @@ if __name__ == '__main__':
     print(f"Fetched {len(articles)} articles via RSS.")
 
     sentiment_data = analyze_financial_sentiment(articles)
+    visualize_sentiment(sentiment_data)
 
