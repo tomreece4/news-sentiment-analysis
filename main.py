@@ -95,7 +95,7 @@ def visualize_sentiment(results):
 
 # Main
 if __name__ == '__main__':
-    # Define RSS feeds for financial news
+    # RSS Feeds used for financial news
     RSS_FEEDS = [
         'https://feeds.reuters.com/reuters/businessNews',
         'https://www.investing.com/rss/news.rss',
@@ -105,5 +105,4 @@ if __name__ == '__main__':
     print(f"Fetched {len(articles)} articles via RSS.")
 
     sentiment_data = analyze_financial_sentiment(articles)
-    visualize_sentiment(sentiment_data)
 
