@@ -4,3 +4,5 @@ matplotlib>=3.7
 nltk>=3.8
 feedparser>=6.0
 python-dotenv>=1.0
+transformers>=4.0
+torch

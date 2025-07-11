@@ -1,12 +1,24 @@
-import datetime
+import os
 import time
+import re
+import datetime
 import feedparser
-import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from nltk import download
 from nltk.sentiment import SentimentIntensityAnalyzer
-import re
+
+# Optional: transformer-based FinBERT for specialized financial sentiment
+try:
+    from transformers import pipeline
+    finbert_pipeline = pipeline(
+        "sentiment-analysis",
+        model="yiyanghkust/finbert-tone",
+        return_all_scores=True
+    )
+except ImportError:
+    finbert_pipeline = None
 
 # Load environment variables
 load_dotenv()
@@ -38,31 +50,50 @@ def fetch_rss_news(rss_urls, max_articles=100):
             break
     return articles
 
-# Function to perform sentiment analysis using VADER
-def analyze_financial_sentiment(articles):
+# Function to perform sentiment analysis using VADER + optional FinBERT
+def analyze_financial_sentiment(articles, use_finbert=True):
     sia = SentimentIntensityAnalyzer()
     sentiment_results = []
 
-    positive_keywords = ['growth', 'surge', 'profit', 'increase', 'gain', 'uptrend', 'rally', 'boom', 'bullish', 'rise']
-    negative_keywords = ['loss', 'decline', 'drop', 'plunge', 'fall', 'bearish', 'downtrend', 'crash', 'collapse', 'slump']
+    pos_keywords = ['growth', 'surge', 'profit', 'increase', 'gain', 'uptrend', 'rally', 'boom', 'bullish', 'rise']
+    neg_keywords = ['loss', 'decline', 'drop', 'plunge', 'fall', 'bearish', 'downtrend', 'crash', 'collapse', 'slump']
 
     for article in articles:
-        text = f"{article['headline']} {article['summary']}".lower()
-        cleaned = re.sub(r'http\\S+|www\\.\\S+', '', text).lower()
+        text = f"{article['headline']} {article['summary']}"
+        cleaned = re.sub(r'http\S+|www\.\S+', '', text).lower()
 
-        score = sia.polarity_scores(cleaned)
+        # VADER scoring
+        vader_scores = sia.polarity_scores(cleaned)
 
-        # Adjust weights
-        pos_count = sum(cleaned.count(k) for k in positive_keywords)
-        neg_count = sum(cleaned.count(k) for k in negative_keywords)
-        score['compound'] = max(-1, min(1, score['compound'] + 0.1 * pos_count - 0.1 * neg_count))
+        # Keyword-based adjustment
+        pos_count = sum(cleaned.count(k) for k in pos_keywords)
+        neg_count = sum(cleaned.count(k) for k in neg_keywords)
+        adjusted = max(-1, min(1, vader_scores['compound'] + 0.1 * pos_count - 0.1 * neg_count))
 
-        category = 'Neutral'
-        if score['compound'] > 0.05:
+        # FinBERT scoring (optional)
+        fin_score = 0.0
+        if use_finbert and finbert_pipeline:
+            try:
+                fin_scores = finbert_pipeline(cleaned)[0]
+                pos = next((d['score'] for d in fin_scores if d['label'].lower() == 'positive'), 0)
+                neg = next((d['score'] for d in fin_scores if d['label'].lower() == 'negative'), 0)
+                fin_score = pos - neg
+            except Exception:
+                fin_score = 0.0
+
+        # Combine VADER + FinBERT (if available)
+        compound = (0.6 * adjusted) + (0.4 * fin_score) if finbert_pipeline else adjusted
+        compound = max(-1, min(1, compound))
+
+        # Categorize
+        if compound > 0.05:
             category = 'Positive'
-        elif score['compound'] < -0.05:
+        elif compound < -0.05:
             category = 'Negative'
+        else:
+            category = 'Neutral'
 
+        # Readable date
         readable_date = None
         if article['datetime']:
             readable_date = datetime.datetime.fromtimestamp(article['datetime'])
@@ -71,11 +102,14 @@ def analyze_financial_sentiment(articles):
             'date': readable_date,
             'headline': article['headline'],
             'url': article['url'],
-            'score': score['compound'],
+            'score': compound,
             'category': category,
+            'vader': vader_scores['compound'],
+            'finbert': fin_score,
             'pos_count': pos_count,
             'neg_count': neg_count
         })
+
     return sentiment_results
 
 # Function to visualize sentiment data
@@ -84,9 +118,11 @@ def visualize_sentiment(results):
         print("No data to visualize.")
         return
     df = pd.DataFrame(results)
-    df['category'] = df['score'].apply(lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral'))
+    df['category'] = df['score'].apply(
+        lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
+    )
 
-    counts = df['category'].value_counts()
+    counts = df['category'].value_counts().reindex(['Positive','Neutral','Negative'], fill_value=0)
     plt.figure(figsize=(8,5))
     counts.plot(kind='bar', edgecolor='black')
     plt.title('Sentiment Distribution')
@@ -94,11 +130,14 @@ def visualize_sentiment(results):
     plt.ylabel('Count')
     plt.show()
 
-    print(df.sort_values('date', ascending=False)[['date','headline','score']].head(10).to_string(index=False))
+    # Show top and bottom by score
+    print("Most Positive Articles:")
+    print(df.nlargest(10,'score')[['date','headline','score','vader','finbert']].to_string(index=False))
+    print("\nMost Negative Articles:")
+    print(df.nsmallest(10,'score')[['date','headline','score','vader','finbert']].to_string(index=False))
 
 # Main
 if __name__ == '__main__':
-    # RSS Feeds used for financial news
     RSS_FEEDS = [
         'https://feeds.reuters.com/reuters/businessNews',
         'https://www.investing.com/rss/news.rss',
@@ -109,4 +148,3 @@ if __name__ == '__main__':
 
     sentiment_data = analyze_financial_sentiment(articles)
     visualize_sentiment(sentiment_data)
-
