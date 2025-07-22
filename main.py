@@ -32,22 +32,32 @@ except:
 # Function to fetch news via RSS feeds
 def fetch_rss_news(rss_urls, max_articles=100):
     articles = []
+    seen_urls = set()
+
     for url in rss_urls:
         feed = feedparser.parse(url)
         for entry in feed.entries:
             if len(articles) >= max_articles:
                 break
+
+            if entry.link in seen_urls:
+                continue
+            seen_urls.add(entry.link)
+
             pub_time = None
             if hasattr(entry, 'published_parsed') and entry.published_parsed:
                 pub_time = time.mktime(entry.published_parsed)
+
             articles.append({
                 'headline': entry.title,
                 'summary': re.sub(r'<[^>]+>', '', getattr(entry, 'summary', '')),
                 'url': entry.link,
                 'datetime': pub_time
             })
+
         if len(articles) >= max_articles:
             break
+
     return articles
 
 # Function to perform sentiment analysis using VADER + optional FinBERT
