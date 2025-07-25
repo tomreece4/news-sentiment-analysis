@@ -49,7 +49,7 @@ def fetch_rss_news(rss_urls, max_articles=100):
                 pub_time = time.mktime(entry.published_parsed)
 
             articles.append({
-                'headline': entry.title,
+                'headline': getattr(entry, 'title', 'No Title'),
                 'summary': re.sub(r'<[^>]+>', '', getattr(entry, 'summary', '')),
                 'url': entry.link,
                 'datetime': pub_time
@@ -106,7 +106,10 @@ def analyze_financial_sentiment(articles, use_finbert=True):
         # Readable date
         readable_date = None
         if article['datetime']:
-            readable_date = datetime.datetime.fromtimestamp(article['datetime'])
+            try:
+                readable_date = datetime.datetime.fromtimestamp(article['datetime'])
+            except Exception:
+                readable_date = None
 
         sentiment_results.append({
             'date': readable_date,
@@ -122,29 +125,41 @@ def analyze_financial_sentiment(articles, use_finbert=True):
 
     return sentiment_results
 
-# Function to visualize sentiment data
+# Debug-safe and table-based visualization
 def visualize_sentiment(results):
     if not results:
         print("No data to visualize.")
         return
+
     df = pd.DataFrame(results)
-    df['category'] = df['score'].apply(
-        lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
-    )
 
-    counts = df['category'].value_counts().reindex(['Positive','Neutral','Negative'], fill_value=0)
-    plt.figure(figsize=(8,5))
-    counts.plot(kind='bar', edgecolor='black')
-    plt.title('Sentiment Distribution')
-    plt.xlabel('Sentiment')
-    plt.ylabel('Count')
-    plt.show()
+    # Ensure datetime is parsed safely
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
-    # Show top and bottom by score
-    print("Most Positive Articles:")
-    print(df.nlargest(10,'score')[['date','headline','score','vader','finbert']].to_string(index=False))
-    print("\nMost Negative Articles:")
-    print(df.nsmallest(10,'score')[['date','headline','score','vader','finbert']].to_string(index=False))
+    # Handle missing expected columns
+    required_cols = ['score', 'headline', 'date', 'vader', 'finbert', 'url']
+    for col in required_cols:
+        if col not in df.columns:
+            print(f"Missing column: {col}")
+            return
+
+    # Classify category if not present
+    if 'category' not in df.columns:
+        df['category'] = df['score'].apply(
+            lambda x: 'Positive' if x > 0.05 else ('Negative' if x < -0.05 else 'Neutral')
+        )
+
+    # Optional: truncate long headlines for display
+    df['headline'] = df['headline'].str.slice(0, 100) + '...'
+
+    top_positive = df.nlargest(10, 'score')[['date', 'headline', 'score', 'vader', 'finbert', 'url']]
+    top_negative = df.nsmallest(10, 'score')[['date', 'headline', 'score', 'vader', 'finbert', 'url']]
+
+    print("\nTop 10 Most Positive Articles:\n")
+    print(top_positive.to_string(index=False))
+
+    print("\nTop 10 Most Negative Articles:\n")
+    print(top_negative.to_string(index=False))
 
 # Main
 if __name__ == '__main__':
