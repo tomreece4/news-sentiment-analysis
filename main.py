@@ -157,10 +157,14 @@ def visualize_sentiment(results):
     top_negative = df.nsmallest(10, 'score')[['date', 'headline', 'score', 'vader', 'finbert', 'url']]
 
     print("\nTop 10 Most Positive Articles:\n")
-    print(top_positive.to_string(index=False))
+    for _, row in top_positive.iterrows():
+        print(f"{row['date']} | {row['headline']} | Score: {row['score']:.3f} | VADER: {row['vader']:.3f} | FinBERT: {row['finbert']:.3f}")
+        print(f"Link: {row['url']}\n")
 
     print("\nTop 10 Most Negative Articles:\n")
-    print(top_negative.to_string(index=False))
+    for _, row in top_negative.iterrows():
+        print(f"{row['date']} | {row['headline']} | Score: {row['score']:.3f} | VADER: {row['vader']:.3f} | FinBERT: {row['finbert']:.3f}")
+        print(f"Link: {row['url']}\n")
 
 
 # ------------------------
