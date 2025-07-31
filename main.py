@@ -2,6 +2,7 @@ import os
 import time
 import re
 import datetime
+import argparse
 import feedparser
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -92,7 +93,7 @@ def analyze_financial_sentiment(articles, use_finbert=True):
                 fin_score = 0.0
 
         # Combine VADER + FinBERT (if available)
-        compound = (0.6 * adjusted) + (0.4 * fin_score) if finbert_pipeline else adjusted
+        compound = (0.6 * adjusted) + (0.4 * fin_score) if use_finbert and finbert_pipeline else adjusted
         compound = max(-1, min(1, compound))
 
         # Categorize
@@ -161,15 +162,29 @@ def visualize_sentiment(results):
     print("\nTop 10 Most Negative Articles:\n")
     print(top_negative.to_string(index=False))
 
-# Main
+
+# ------------------------
+# Main script with CLI arg
+# ------------------------
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Financial News Sentiment Analyzer")
+    parser.add_argument(
+        "--no-finbert",
+        action="store_true",
+        help="Disable FinBERT for sentiment analysis"
+    )
+    args = parser.parse_args()
+
+    use_finbert = not args.no_finbert
+
     RSS_FEEDS = [
         'https://feeds.reuters.com/reuters/businessNews',
         'https://www.investing.com/rss/news.rss',
         'https://feeds.marketwatch.com/marketwatch/topstories/'
     ]
+
     articles = fetch_rss_news(RSS_FEEDS, max_articles=100)
     print(f"Fetched {len(articles)} articles via RSS.")
 
-    sentiment_data = analyze_financial_sentiment(articles)
+    sentiment_data = analyze_financial_sentiment(articles, use_finbert=use_finbert)
     visualize_sentiment(sentiment_data)
