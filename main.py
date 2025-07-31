@@ -1,41 +1,23 @@
-import os
+print("Importing Packages...")
 import time
 import re
 import datetime
 import argparse
 import feedparser
 import pandas as pd
-import matplotlib.pyplot as plt
-from dotenv import load_dotenv
 from nltk import download
 from nltk.sentiment import SentimentIntensityAnalyzer
+from tqdm import tqdm
 
-# Optional: transformer-based FinBERT for specialized financial sentiment
-try:
-    from transformers import pipeline
-    finbert_pipeline = pipeline(
-        "sentiment-analysis",
-        model="yiyanghkust/finbert-tone",
-        return_all_scores=True
-    )
-except ImportError:
-    finbert_pipeline = None
 
-# Load environment variables
-load_dotenv()
-
-# Download VADER lexicon for sentiment analysis
-try:
-    download('vader_lexicon')
-except:
-    pass
+download('vader_lexicon')
 
 # Function to fetch news via RSS feeds
 def fetch_rss_news(rss_urls, max_articles=100):
     articles = []
     seen_urls = set()
 
-    for url in rss_urls:
+    for url in tqdm(rss_urls, desc="Fetching RSS Feeds..."):
         feed = feedparser.parse(url)
         for entry in feed.entries:
             if len(articles) >= max_articles:
@@ -63,13 +45,24 @@ def fetch_rss_news(rss_urls, max_articles=100):
 
 # Function to perform sentiment analysis using VADER + optional FinBERT
 def analyze_financial_sentiment(articles, use_finbert=True):
+
+    if use_finbert:
+        print("Loading finbert model...")
+        from transformers import pipeline
+        finbert_pipeline = pipeline(
+            "sentiment-analysis",
+            model="yiyanghkust/finbert-tone",
+            return_all_scores=True
+        )
+        print("Finbert model loaded")
+
     sia = SentimentIntensityAnalyzer()
     sentiment_results = []
 
     pos_keywords = ['growth', 'surge', 'profit', 'increase', 'gain', 'uptrend', 'rally', 'boom', 'bullish', 'rise']
     neg_keywords = ['loss', 'decline', 'drop', 'plunge', 'fall', 'bearish', 'downtrend', 'crash', 'collapse', 'slump']
 
-    for article in articles:
+    for article in tqdm(articles, desc="Analyzing Articles...", unit="article"):
         text = f"{article['headline']} {article['summary']}"
         cleaned = re.sub(r'http\S+|www\.\S+', '', text).lower()
 
