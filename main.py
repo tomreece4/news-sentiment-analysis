@@ -50,7 +50,7 @@ def analyze_financial_sentiment(articles, use_finbert=True):
         print("Loading finbert model...")
         from transformers import pipeline
         finbert_pipeline = pipeline(
-            "sentiment-analysis",
+            task="sentiment-analysis",
             model="yiyanghkust/finbert-tone",
             return_all_scores=True
         )
