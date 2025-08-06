@@ -1,4 +1,4 @@
-# Financial News Sentiment Analyzer
+# Financial News Sentiment Analyser
 
 This Python project fetches financial news from popular RSS feeds and performs sentiment analysis using both traditional and transformer-based NLP models (VADER + optional FinBERT). It classifies articles as Positive, Negative, or Neutral and displays a ranked list of the most impactful stories.
 
