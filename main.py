@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 download('vader_lexicon')
 
-# Function to fetch news via RSS feeds
+# Function to fetch news via RSS feeds, as it is an easy way to get latest news
 def fetch_rss_news(rss_urls, max_articles=100):
     articles = []
     seen_urls = set()
@@ -43,7 +43,8 @@ def fetch_rss_news(rss_urls, max_articles=100):
 
     return articles
 
-# Function to perform sentiment analysis using VADER + optional FinBERT
+# Function to perform sentiment analysis using VADER + optional FinBERT, finBERT is optional as it can significantly
+# slow down the analysis, and may sometimes be slower than expected.
 def analyze_financial_sentiment(articles, use_finbert=True):
 
     if use_finbert:
@@ -89,7 +90,7 @@ def analyze_financial_sentiment(articles, use_finbert=True):
         compound = (0.6 * adjusted) + (0.4 * fin_score) if use_finbert and finbert_pipeline else adjusted
         compound = max(-1, min(1, compound))
 
-        # Categorize
+        # Categorise into positive, negative, neutral based on their calculated scores
         if compound > 0.05:
             category = 'Positive'
         elif compound < -0.05:
@@ -97,7 +98,7 @@ def analyze_financial_sentiment(articles, use_finbert=True):
         else:
             category = 'Neutral'
 
-        # Readable date
+
         readable_date = None
         if article['datetime']:
             try:
@@ -160,9 +161,7 @@ def visualize_sentiment(results):
         print(f"Link: {row['url']}\n")
 
 
-# ------------------------
-# Main script with CLI arg
-# ------------------------
+# Ran through the terminal, can specificy --no-finbert to disable the finBERT setting for faster analysis.
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Financial News Sentiment Analyzer")
     parser.add_argument(
